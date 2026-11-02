@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Biggest Office Hunt{% endblock %}
+{% block content %}
+<h1 class="page-title" style="font-size:48px; letter-spacing:4px; margin:30px 0 30px;">BIGGEST<br>OFFICE HUNT</h1>
+<p class="page-subtitle">Select your country to begin</p>
+
+{% for code, info in countries.items() %}
+<a href="/register/{{ code }}" class="btn btn-country">
+    <span class="country-flag">{{ info.flag }}</span> {{ info.name }}
+</a>
+{% endfor %}
+
+<p class="footer-note">Explore, Snap &amp; Win!</p>
+{% endblock %}
