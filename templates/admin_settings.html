@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Game Settings — {{ country_name }}{% endblock %}
+{% block content %}
+<a href="/admin/{{ country_code }}" class="back-link">&larr; Dashboard</a>
+<h1 class="page-title" style="font-size:20px;">{{ country_name }}<br>Game Settings</h1>
+
+{% if success %}
+<div class="success-msg">{{ success }}</div>
+{% endif %}
+
+{% if error %}
+<div class="error-msg">{{ error }}</div>
+{% endif %}
+
+<form method="POST" action="/admin/{{ country_code }}/settings">
+    <div class="form-group">
+        <label class="form-label">First Clue</label>
+        <textarea name="first_clue" class="form-input" rows="3" placeholder="The first clue shown after registration">{{ first_clue }}</textarea>
+        <p style="font-size:12px; opacity:0.6; margin-top:4px;">This is the clue players see immediately after registering.</p>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Mechanics Text (shown on registration page)</label>
+        <textarea name="mechanics_text" class="form-input" rows="12" placeholder="HTML content for the game mechanics/instructions">{{ mechanics_text }}</textarea>
+        <p style="font-size:12px; opacity:0.6; margin-top:4px;">Supports HTML. Use #{{ hashtag }} for the country hashtag.</p>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+</form>
+{% endblock %}
