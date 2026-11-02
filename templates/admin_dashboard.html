@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Admin — {{ country_name }}{% endblock %}
+{% block content %}
+<a href="/" class="back-link">&larr; Home</a>
+<h1 class="page-title" style="font-size:20px;">{{ country_name }}<br>Admin Dashboard</h1>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_players }}</div>
+        <div class="stat-label">Registered</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ completed }}</div>
+        <div class="stat-label">Completed</div>
+    </div>
+</div>
+
+<div class="section-title">Pitstops ({{ stops|length }})</div>
+
+{% for stop in stops %}
+<div class="stop-card">
+    <div class="stop-card-header">
+        <span class="stop-card-num">Stop {{ stop.stop_number }}{% if stop.is_finale %} (Finale){% endif %}</span>
+        <span class="stop-card-actions">
+            <a href="/admin/{{ country_code }}/stop/{{ stop.id }}/edit">Edit</a>
+            <a href="/qr/{{ country_code }}/{{ stop.stop_number }}">QR</a>
+            {% if not stop.is_finale %}
+            <a href="/admin/{{ country_code }}/stop/{{ stop.id }}/delete" onclick="return confirm('Delete this stop?')">Delete</a>
+            {% endif %}
+        </span>
+    </div>
+    <div class="stop-card-location">{{ stop.location_name }}</div>
+    {% if not stop.is_finale %}
+    <div class="stop-card-question">Q: {{ stop.question[:60] }}{% if stop.question|length > 60 %}...{% endif %}</div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<a href="/admin/{{ country_code }}/stop/add" class="btn btn-outline" style="margin-top:12px;">+ Add Pitstop</a>
+
+<div class="section-title">Leaderboard ({{ leaderboard|length }} completions)</div>
+{% if leaderboard %}
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Time</th>
+                <th>Completed At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in leaderboard %}
+            <tr>
+                <td class="rank {% if loop.index <= 3 %}rank-{{ loop.index }}{% endif %}">{{ loop.index }}</td>
+                <td>{{ p.employee_id }}</td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.total_time }}</td>
+                <td style="font-size:11px; opacity:0.7;">{{ p.completed_at[:16].replace('T', ' ') if p.completed_at else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card"><div class="card-text">No completions yet.</div></div>
+{% endif %}
+
+<div class="nav-links" style="margin-top:20px;">
+    <a href="/admin/{{ country_code }}/settings" class="btn btn-outline">Game Settings</a>
+    <a href="/export/{{ country_code }}" class="btn btn-outline">Export CSV</a>
+    <a href="/admin/{{ country_code }}/reset" class="btn btn-outline" onclick="return confirm('Reset all player data? This cannot be undone.')" style="border-color:rgba(255,100,100,0.5); color:#ffaaaa;">Reset Data</a>
+</div>
+
+<p class="footer-note">Admin session for {{ country_name }} &bull; <a href="/admin/{{ country_code }}/logout" style="color:#fff;opacity:0.7;">Logout</a></p>
+{% endblock %}
