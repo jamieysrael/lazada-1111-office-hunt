@@ -9,26 +9,6 @@
 {% endif %}
 
 <form method="POST" action="{{ form_action }}">
-    <!-- Regular pitstop fields (always visible) -->
-    <div id="regular_fields">
-        <div class="form-group">
-            <label class="form-label">Location Name</label>
-            <input type="text" name="location_name" id="location_name" class="form-input" value="{{ stop.location_name if stop else '' }}" placeholder="e.g. Floor 2 Pantry" required>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Question</label>
-            <input type="text" name="question" id="question" class="form-input" value="{{ stop.question if stop else '' }}" placeholder="11.11 trivia question">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Correct Answer</label>
-            <input type="text" name="answer" id="answer" class="form-input" value="{{ stop.answer if stop else '' }}" placeholder="Correct answer (case-insensitive)">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Clue to Next Stop</label>
-            <input type="text" name="clue_to_next" id="clue_to_next" class="form-input" value="{{ stop.clue_to_next if stop else '' }}" placeholder="Hint pointing to next location">
-        </div>
-    </div>
-
     <!-- Is this the final stop checkbox -->
     <div class="form-group">
         <label class="form-label">
@@ -53,8 +33,30 @@
         </div>
     </div>
 
+    <!-- Common field: Location Name -->
+    <div class="form-group">
+        <label class="form-label">Location Name</label>
+        <input type="text" name="location_name" class="form-input" value="{{ stop.location_name if stop else '' }}" placeholder="e.g. Floor 2 Pantry" required>
+    </div>
+
+    <!-- Question fields (visible for regular stops and question finale) -->
+    <div id="question_fields">
+        <div class="form-group">
+            <label class="form-label">Question</label>
+            <input type="text" name="question" id="question" class="form-input" value="{{ stop.question if stop else '' }}" placeholder="11.11 trivia question">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Correct Answer</label>
+            <input type="text" name="answer" id="answer" class="form-input" value="{{ stop.answer if stop else '' }}" placeholder="Correct answer (case-insensitive)">
+        </div>
+        <div class="form-group">
+            <label class="form-label" id="clue_label">Clue to Next Stop</label>
+            <input type="text" name="clue_to_next" id="clue_to_next" class="form-input" value="{{ stop.clue_to_next if stop else '' }}" placeholder="Hint pointing to next location">
+        </div>
+    </div>
+
     <!-- Team Photo fields (visible when finale_type is team_photo) -->
-    <div id="team_photo_fields" style="display:none; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 16px; margin-top: 16px;">
+    <div id="team_photo_fields" style="display:none;">
         <div class="form-group">
             <label class="form-label">Final Message</label>
             <input type="text" name="finale_message" class="form-input" value="{{ stop.finale_message if stop else '' }}" placeholder="e.g. You made it to the Team Show Booth!">
@@ -86,17 +88,18 @@ function toggleFinale() {
     var finaleTypeSection = document.getElementById('finale_type_section');
     finaleTypeSection.style.display = isFinale ? 'block' : 'none';
 
-    // If not finale, hide all finale-specific fields
     if (!isFinale) {
+        // Regular stop: show question fields, hide team photo
         document.getElementById('team_photo_fields').style.display = 'none';
-        // Make question/answer required for regular stops
+        document.getElementById('question_fields').style.display = 'block';
+        // Make question/answer/clue required for regular stops
         document.getElementById('question').setAttribute('required', '');
         document.getElementById('answer').setAttribute('required', '');
         document.getElementById('clue_to_next').setAttribute('required', '');
+        document.getElementById('clue_label').textContent = 'Clue to Next Stop';
     } else {
-        // For finale, clue is not required
-        document.getElementById('clue_to_next').removeAttribute('required');
-        // Update visibility based on finale type
+        // Finale: update based on type
+        document.getElementById('clue_label').textContent = 'Clue to Next Stop (optional for final)';
         toggleFinaleType();
     }
 }
@@ -106,22 +109,25 @@ function toggleFinaleType() {
     if (!isFinale) return;
 
     var isQuestion = document.getElementById('finale_type_question').checked;
+    var questionFields = document.getElementById('question_fields');
     var teamPhotoFields = document.getElementById('team_photo_fields');
-    var question = document.getElementById('question');
-    var answer = document.getElementById('answer');
 
     if (isQuestion) {
-        // Question mode: show question/answer fields, hide team photo fields
+        // Question mode: show question fields, hide team photo
+        questionFields.style.display = 'block';
         teamPhotoFields.style.display = 'none';
-        question.setAttribute('required', '');
-        answer.setAttribute('required', '');
+        // Question and answer required, clue optional for final
+        document.getElementById('question').setAttribute('required', '');
+        document.getElementById('answer').setAttribute('required', '');
+        document.getElementById('clue_to_next').removeAttribute('required');
     } else {
-        // Team Photo mode: hide question/answer fields, show team photo fields
+        // Team Photo mode: hide question fields, show team photo
+        questionFields.style.display = 'none';
         teamPhotoFields.style.display = 'block';
-        question.removeAttribute('required');
-        answer.removeAttribute('required');
-        question.value = '';
-        answer.value = '';
+        // Remove required from question fields
+        document.getElementById('question').removeAttribute('required');
+        document.getElementById('answer').removeAttribute('required');
+        document.getElementById('clue_to_next').removeAttribute('required');
     }
 }
 
