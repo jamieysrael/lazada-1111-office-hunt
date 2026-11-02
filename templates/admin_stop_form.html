@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ action_title }} Stop — {{ country_name }}{% endblock %}
+{% block content %}
+<a href="/admin/{{ country_code }}" class="back-link">&larr; Dashboard</a>
+<h1 class="page-title" style="font-size:20px;">{{ action_title }} Pitstop</h1>
+
+{% if error %}
+<div class="error-msg">{{ error }}</div>
+{% endif %}
+
+<form method="POST" action="{{ form_action }}">
+    <div class="form-group">
+        <label class="form-label">Location Name</label>
+        <input type="text" name="location_name" class="form-input" value="{{ stop.location_name if stop else '' }}" placeholder="e.g. Floor 2 Pantry" required>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Question</label>
+        <input type="text" name="question" class="form-input" value="{{ stop.question if stop else '' }}" placeholder="11.11 trivia question" required>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Correct Answer</label>
+        <input type="text" name="answer" class="form-input" value="{{ stop.answer if stop else '' }}" placeholder="Correct answer (case-insensitive)" required>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Clue to Next Stop</label>
+        <input type="text" name="clue_to_next" class="form-input" value="{{ stop.clue_to_next if stop else '' }}" placeholder="Hint pointing to next location" required>
+    </div>
+    <div class="form-group">
+        <label class="form-label">
+            <input type="checkbox" name="is_finale" {{ 'checked' if stop and stop.is_finale else '' }}> This is the finale stop (no question)
+        </label>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ 'Update' if stop else 'Add' }} Pitstop</button>
+</form>
+{% endblock %}
