@@ -843,8 +843,12 @@ def admin_add_stop(country_code):
         clue = request.form.get("clue_to_next", "").strip()
         is_finale = 1 if request.form.get("is_finale") else 0
 
-        # Finale-specific fields
+        # Finale type: "question" or "team_photo"
         finale_type = request.form.get("finale_type", "team_photo").strip()
+        if finale_type not in ("question", "team_photo"):
+            finale_type = "team_photo"
+
+        # Finale-specific fields
         finale_message = request.form.get("finale_message", "").strip()
         finale_task = request.form.get("finale_task", "").strip()
         finale_details = request.form.get("finale_details", "").strip()
@@ -895,8 +899,12 @@ def admin_edit_stop(country_code, stop_id):
         clue = request.form.get("clue_to_next", "").strip()
         is_finale = 1 if request.form.get("is_finale") else 0
 
-        # Finale-specific fields
+        # Finale type: "question" or "team_photo"
         finale_type = request.form.get("finale_type", "team_photo").strip()
+        if finale_type not in ("question", "team_photo"):
+            finale_type = "team_photo"
+
+        # Finale-specific fields
         finale_message = request.form.get("finale_message", "").strip()
         finale_task = request.form.get("finale_task", "").strip()
         finale_details = request.form.get("finale_details", "").strip()
