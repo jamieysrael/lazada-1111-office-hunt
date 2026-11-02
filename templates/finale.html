@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Grand Finale — {{ country_name }}{% endblock %}
+{% block content %}
+<div class="progress-label">Grand Finale!</div>
+<div class="progress-bar">
+    <div class="progress-fill" style="width: 100%"></div>
+</div>
+
+<div class="success-msg">You made it to the Team Show Booth!</div>
+
+<h2 class="page-title" style="font-size:22px;">Snap &amp; Share!</h2>
+
+<div class="card">
+    <div class="card-title">Final Step</div>
+    <div class="card-text">
+        1. Take a team photo at this booth<br>
+        2. Post it on Buzz with the hashtag below<br>
+        3. Paste your Buzz post URL to complete the hunt!
+    </div>
+</div>
+
+<div style="text-align:center;">
+    <span class="hashtag">#{{ hashtag }}</span>
+</div>
+
+{% if error %}
+<div class="error-msg">{{ error }}</div>
+{% endif %}
+
+<form method="POST" action="/finale/{{ country_code }}">
+    <input type="url" name="buzz_url" class="input-field" placeholder="Paste your Buzz post URL here..." required>
+    <button type="submit" class="btn btn-primary">Complete the Hunt!</button>
+</form>
+{% endblock %}
