@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Not Quite — {{ country_name }}{% endblock %}
+{% block content %}
+<div class="progress-label">Clue {{ stop_num }} of {{ total_stops }}</div>
+<div class="progress-bar">
+    <div class="progress-fill" style="width: {{ (stop_num / total_stops * 100)|int }}%"></div>
+</div>
+
+<div style="text-align:center; margin-top:30px;">
+    <div style="font-size:64px; margin-bottom:16px;">❌</div>
+    <h1 class="page-title" style="font-size:22px;">Not quite right!</h1>
+    <p class="page-subtitle">Don't worry — go back to the location, re-read the question, and try again.</p>
+</div>
+
+<div class="nav-links" style="margin-top:30px;">
+    <a href="/clue/{{ country_code }}/{{ stop_num }}" class="btn btn-primary">Try Again</a>
+</div>
+{% endblock %}
