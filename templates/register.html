@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Register — {{ country_name }}{% endblock %}
+{% block content %}
+<a href="/" class="back-link">&larr; Back</a>
+<h1 class="page-title" style="font-size:42px; letter-spacing:3px; margin:24px 0 24px;">{{ country_name|upper }}<br>OFFICE HUNT</h1>
+<p class="page-subtitle">Enter your Employee ID to start the hunt</p>
+
+{% if error %}
+<div class="error-msg">{{ error }}</div>
+{% endif %}
+
+<form method="POST" action="/register/{{ country_code }}">
+    <input type="text" name="employee_id" class="input-field" placeholder="Employee ID" required autocomplete="off">
+    <button type="submit" class="btn btn-primary">Start the Hunt!</button>
+</form>
+
+<div class="card" style="margin-top:24px;">
+    <div class="card-title">Explore, Snap &amp; Win!</div>
+    <div class="card-text">{{ mechanics_text|safe }}</div>
+</div>
+{% endblock %}
