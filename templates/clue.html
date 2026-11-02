@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Clue {{ stop_num }} — {{ country_name }}{% endblock %}
+{% block content %}
+<div class="progress-label">Clue {{ stop_num }} of {{ total_stops }}</div>
+<div class="progress-bar">
+    <div class="progress-fill" style="width: {{ (stop_num / total_stops * 100)|int }}%"></div>
+</div>
+
+<div class="clue-text">{{ clue }}</div>
+
+<p class="page-subtitle" style="margin-top:20px;">Go to the location, read the question there, then enter your answer below.</p>
+
+<form method="POST" action="/clue/{{ country_code }}/{{ stop_num }}">
+    <input type="text" name="answer" class="input-field" placeholder="Your answer..." required autocomplete="off" autofocus>
+    <button type="submit" class="btn btn-primary">Submit Answer</button>
+</form>
+{% endblock %}
