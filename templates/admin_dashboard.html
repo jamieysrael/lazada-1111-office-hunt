@@ -23,7 +23,6 @@
         <span class="stop-card-num">Stop {{ stop.stop_number }}{% if stop.is_finale %} (Finale){% endif %}</span>
         <span class="stop-card-actions">
             <a href="/admin/{{ country_code }}/stop/{{ stop.id }}/edit">Edit</a>
-            <a href="/qr/{{ country_code }}/{{ stop.stop_number }}">QR</a>
             {% if not stop.is_finale %}
             <a href="/admin/{{ country_code }}/stop/{{ stop.id }}/delete" onclick="return confirm('Delete this stop?')">Delete</a>
             {% endif %}
