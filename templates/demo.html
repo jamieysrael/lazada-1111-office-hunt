@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Demo - All Screens{% endblock %}
+{% block content %}
+<h1 class="page-title" style="font-size:28px;">Prototype Preview</h1>
+<p class="page-subtitle">Click any screen to preview it</p>
+
+{% for screen in screens %}
+<a href="{{ screen.url }}" class="btn btn-country" style="text-align:left; padding:16px 20px;">
+    <div style="font-weight:700; font-size:16px; margin-bottom:4px;">{{ screen.title }}</div>
+    <div style="font-size:13px; opacity:0.8;">{{ screen.description }}</div>
+</a>
+{% endfor %}
+
+<p class="footer-note" style="margin-top:30px;">
+    <a href="/" style="color:#fff; opacity:0.7;">← Back to Homepage</a>
+</p>
+{% endblock %}
