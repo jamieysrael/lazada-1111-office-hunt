@@ -62,6 +62,11 @@ def init_db():
             answer TEXT NOT NULL DEFAULT '',
             clue_to_next TEXT NOT NULL DEFAULT '',
             is_finale INTEGER DEFAULT 0,
+            finale_message TEXT DEFAULT '',
+            finale_task TEXT DEFAULT '',
+            finale_details TEXT DEFAULT '',
+            finale_hashtag TEXT DEFAULT '',
+            finale_input_label TEXT DEFAULT '',
             UNIQUE(country_code, stop_number)
         );
 
@@ -92,6 +97,27 @@ def init_db():
             total_time_seconds REAL DEFAULT 0
         );
     """)
+    db.commit()
+
+
+def migrate_db():
+    """Add new columns to existing database if they don't exist."""
+    db = get_db()
+    columns = db.execute("PRAGMA table_info(stops)").fetchall()
+    existing = {col["name"] for col in columns}
+
+    new_columns = [
+        ("finale_message", "TEXT DEFAULT ''"),
+        ("finale_task", "TEXT DEFAULT ''"),
+        ("finale_details", "TEXT DEFAULT ''"),
+        ("finale_hashtag", "TEXT DEFAULT ''"),
+        ("finale_input_label", "TEXT DEFAULT ''"),
+    ]
+
+    for col_name, col_type in new_columns:
+        if col_name not in existing:
+            db.execute(f"ALTER TABLE stops ADD COLUMN {col_name} {col_type}")
+
     db.commit()
 
 
@@ -465,6 +491,19 @@ def finale(country_code):
     player_id = session["player_id"]
     db = get_db()
 
+    # Fetch the finale stop for this country to get dynamic fields
+    finale_stop = db.execute(
+        "SELECT * FROM stops WHERE country_code=? AND is_finale=1 ORDER BY stop_number DESC LIMIT 1",
+        (country_code.upper(),),
+    ).fetchone()
+
+    # Use finale stop fields if available, otherwise fall back to defaults
+    finale_message = finale_stop["finale_message"] if finale_stop and finale_stop["finale_message"] else "You made it to the Team Show Booth!"
+    finale_task = finale_stop["finale_task"] if finale_stop and finale_stop["finale_task"] else "1. Take a team photo at this booth<br>2. Post it on Buzz with the hashtag below<br>3. Paste your Buzz post URL to complete the hunt!"
+    finale_details = finale_stop["finale_details"] if finale_stop and finale_stop["finale_details"] else ""
+    finale_hashtag = finale_stop["finale_hashtag"] if finale_stop and finale_stop["finale_hashtag"] else country["hashtag"]
+    finale_input_label = finale_stop["finale_input_label"] if finale_stop and finale_stop["finale_input_label"] else "Paste your Buzz post URL here..."
+
     if request.method == "POST":
         buzz_url = request.form.get("buzz_url", "").strip()
         if not buzz_url:
@@ -472,7 +511,11 @@ def finale(country_code):
                 "finale.html",
                 country_name=country["name"],
                 country_code=country_code.upper(),
-                hashtag=country["hashtag"],
+                hashtag=finale_hashtag,
+                finale_message=finale_message,
+                finale_task=finale_task,
+                finale_details=finale_details,
+                input_label=finale_input_label,
                 error="Please enter your Buzz post URL.",
             )
 
@@ -512,7 +555,11 @@ def finale(country_code):
         "finale.html",
         country_name=country["name"],
         country_code=country_code.upper(),
-        hashtag=country["hashtag"],
+        hashtag=finale_hashtag,
+        finale_message=finale_message,
+        finale_task=finale_task,
+        finale_details=finale_details,
+        input_label=finale_input_label,
         error=None,
     )
 
@@ -705,6 +752,13 @@ def admin_add_stop(country_code):
         clue = request.form.get("clue_to_next", "").strip()
         is_finale = 1 if request.form.get("is_finale") else 0
 
+        # Finale-specific fields
+        finale_message = request.form.get("finale_message", "").strip()
+        finale_task = request.form.get("finale_task", "").strip()
+        finale_details = request.form.get("finale_details", "").strip()
+        finale_hashtag = request.form.get("finale_hashtag", "").strip()
+        finale_input_label = request.form.get("finale_input_label", "").strip()
+
         if not location:
             error = "Location name is required."
         else:
@@ -714,8 +768,8 @@ def admin_add_stop(country_code):
                 (country_code.upper(),),
             ).fetchone()["m"]
             db.execute(
-                "INSERT INTO stops (country_code, stop_number, location_name, question, answer, clue_to_next, is_finale) VALUES (?,?,?,?,?,?,?)",
-                (country_code.upper(), max_num + 1, location, question, answer, clue, is_finale),
+                "INSERT INTO stops (country_code, stop_number, location_name, question, answer, clue_to_next, is_finale, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (country_code.upper(), max_num + 1, location, question, answer, clue, is_finale, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label),
             )
             db.commit()
             return redirect(f"/admin/{country_code}")
@@ -749,12 +803,19 @@ def admin_edit_stop(country_code, stop_id):
         clue = request.form.get("clue_to_next", "").strip()
         is_finale = 1 if request.form.get("is_finale") else 0
 
+        # Finale-specific fields
+        finale_message = request.form.get("finale_message", "").strip()
+        finale_task = request.form.get("finale_task", "").strip()
+        finale_details = request.form.get("finale_details", "").strip()
+        finale_hashtag = request.form.get("finale_hashtag", "").strip()
+        finale_input_label = request.form.get("finale_input_label", "").strip()
+
         if not location:
             error = "Location name is required."
         else:
             db.execute(
-                "UPDATE stops SET location_name=?, question=?, answer=?, clue_to_next=?, is_finale=? WHERE id=?",
-                (location, question, answer, clue, is_finale, stop_id),
+                "UPDATE stops SET location_name=?, question=?, answer=?, clue_to_next=?, is_finale=?, finale_message=?, finale_task=?, finale_details=?, finale_hashtag=?, finale_input_label=? WHERE id=?",
+                (location, question, answer, clue, is_finale, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label, stop_id),
             )
             db.commit()
             return redirect(f"/admin/{country_code}")
@@ -922,6 +983,7 @@ def demo_complete():
 
 with app.app_context():
     init_db()
+    migrate_db()
     seed_countries()
     seed_placeholder_stops()
 
