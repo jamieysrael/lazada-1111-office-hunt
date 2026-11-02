@@ -27,9 +27,60 @@
     </div>
     <div class="form-group">
         <label class="form-label">
-            <input type="checkbox" name="is_finale" {{ 'checked' if stop and stop.is_finale else '' }}> This is the finale stop (no question)
+            <input type="checkbox" name="is_finale" id="is_finale" {{ 'checked' if stop and stop.is_finale else '' }} onchange="toggleFinaleFields()"> This is the finale stop (no question)
         </label>
     </div>
+
+    <!-- Finale-specific fields -->
+    <div id="finale_fields" style="display:none; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 16px; margin-top: 16px;">
+        <div class="form-group">
+            <label class="form-label">Final Message</label>
+            <input type="text" name="finale_message" class="form-input" value="{{ stop.finale_message if stop else '' }}" placeholder="e.g. You made it to the Team Show Booth!">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Pitstop Final Task</label>
+            <textarea name="finale_task" class="form-input" rows="3" placeholder="e.g. 1. Take a team photo at this booth&#10;2. Post it on Buzz with the hashtag below&#10;3. Paste your Buzz post URL to complete the hunt!">{{ stop.finale_task if stop else '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Pitstop Final Details</label>
+            <textarea name="finale_details" class="form-input" rows="2" placeholder="Any additional details or instructions">{{ stop.finale_details if stop else '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label"># Hashtag</label>
+            <input type="text" name="finale_hashtag" class="form-input" value="{{ stop.finale_hashtag if stop else '' }}" placeholder="e.g. 2026BiggestSaleSG">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Input Field Label (URL or Answer)</label>
+            <input type="text" name="finale_input_label" class="form-input" value="{{ stop.finale_input_label if stop else '' }}" placeholder="e.g. Paste your Buzz post URL here...">
+        </div>
+    </div>
+
     <button type="submit" class="btn btn-primary">{{ 'Update' if stop else 'Add' }} Pitstop</button>
 </form>
+
+<script>
+function toggleFinaleFields() {
+    var isFinale = document.getElementById('is_finale').checked;
+    var finaleFields = document.getElementById('finale_fields');
+    finaleFields.style.display = isFinale ? 'block' : 'none';
+
+    // Make question/answer/clue not required when finale is checked
+    var question = document.querySelector('input[name="question"]');
+    var answer = document.querySelector('input[name="answer"]');
+    var clue = document.querySelector('input[name="clue_to_next"]');
+
+    if (isFinale) {
+        question.removeAttribute('required');
+        answer.removeAttribute('required');
+        clue.removeAttribute('required');
+    } else {
+        question.setAttribute('required', '');
+        answer.setAttribute('required', '');
+        clue.setAttribute('required', '');
+    }
+}
+
+// Run on page load
+toggleFinaleFields();
+</script>
 {% endblock %}
