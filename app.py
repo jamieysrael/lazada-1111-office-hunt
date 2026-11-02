@@ -62,6 +62,7 @@ def init_db():
             answer TEXT NOT NULL DEFAULT '',
             clue_to_next TEXT NOT NULL DEFAULT '',
             is_finale INTEGER DEFAULT 0,
+            finale_type TEXT DEFAULT 'team_photo',
             finale_message TEXT DEFAULT '',
             finale_task TEXT DEFAULT '',
             finale_details TEXT DEFAULT '',
@@ -107,6 +108,7 @@ def migrate_db():
     existing = {col["name"] for col in columns}
 
     new_columns = [
+        ("finale_type", "TEXT DEFAULT 'team_photo'"),
         ("finale_message", "TEXT DEFAULT ''"),
         ("finale_task", "TEXT DEFAULT ''"),
         ("finale_details", "TEXT DEFAULT ''"),
@@ -384,8 +386,12 @@ def clue(country_code, stop_num):
     if not stop:
         return redirect(f"/clue/{country_code}/1")
 
+    # For finale stops: if team_photo type, redirect to finale page; if question type, treat as regular stop
     if stop["is_finale"]:
-        return redirect(f"/finale/{country_code}")
+        finale_type = stop["finale_type"] if stop["finale_type"] else "team_photo"
+        if finale_type == "team_photo":
+            return redirect(f"/finale/{country_code}")
+        # For question type, continue to show the question below
 
     # Check all previous stops completed
     for sn in range(1, stop_num):
@@ -412,7 +418,12 @@ def clue(country_code, stop_num):
             (country_code.upper(), stop_num + 1),
         ).fetchone()
         if next_stop and next_stop["is_finale"]:
-            return redirect(f"/finale/{country_code}")
+            # Check finale type: question type goes to clue, team_photo goes to finale
+            next_finale_type = next_stop["finale_type"] if next_stop["finale_type"] else "team_photo"
+            if next_finale_type == "team_photo":
+                return redirect(f"/finale/{country_code}")
+            else:
+                return redirect(f"/clue/{country_code}/{stop_num + 1}")
         if next_stop:
             return redirect(f"/clue/{country_code}/{stop_num + 1}")
         return redirect(f"/finale/{country_code}")
@@ -432,12 +443,67 @@ def clue(country_code, stop_num):
             )
             db.commit()
 
+            # Check if this stop is a question-type finale
+            if stop["is_finale"]:
+                finale_type = stop["finale_type"] if stop["finale_type"] else "team_photo"
+                if finale_type == "question":
+                    # Question-type finale completed - record completion and go to complete page
+                    now = datetime.utcnow()
+                    player_row = db.execute(
+                        "SELECT registered_at FROM players WHERE id=?", (player_id,)
+                    ).fetchone()
+                    total_seconds = 0
+                    if player_row:
+                        reg_dt = datetime.fromisoformat(player_row["registered_at"])
+                        total_seconds = (now - reg_dt).total_seconds()
+
+                    # Check if already has a completion record
+                    existing_comp = db.execute(
+                        "SELECT * FROM completions WHERE player_id=?", (player_id,)
+                    ).fetchone()
+                    if not existing_comp:
+                        db.execute(
+                            "INSERT INTO completions (player_id, buzz_post_url, completed_at, total_time_seconds) VALUES (?,?,?,?)",
+                            (player_id, "", now.isoformat(), total_seconds),
+                        )
+                        db.commit()
+
+                    # Calculate rank
+                    rank_row = db.execute(
+                        "SELECT COUNT(*) + 1 as r FROM completions WHERE player_id IN (SELECT id FROM players WHERE country_code=?) AND completed_at < ?",
+                        (country_code.upper(), now.isoformat()),
+                    ).fetchone()
+                    rank = rank_row["r"]
+
+                    return render_template(
+                        "complete.html",
+                        country_name=country["name"],
+                        country_code=country_code.upper(),
+                        rank=rank,
+                        total_time=format_duration(total_seconds),
+                        speed_quota=30,
+                    )
+
             next_stop = db.execute(
                 "SELECT * FROM stops WHERE country_code=? AND stop_number=?",
                 (country_code.upper(), stop_num + 1),
             ).fetchone()
             if next_stop and next_stop["is_finale"]:
-                return redirect(f"/finale/{country_code}")
+                # Check finale type: question type goes to clue, team_photo goes to finale
+                next_finale_type = next_stop["finale_type"] if next_stop["finale_type"] else "team_photo"
+                if next_finale_type == "team_photo":
+                    return redirect(f"/finale/{country_code}")
+                else:
+                    # Question type finale - show clue to next stop
+                    return render_template(
+                        "clue.html",
+                        country_name=country["name"],
+                        country_code=country_code.upper(),
+                        stop_num=stop_num + 1,
+                        total_stops=total,
+                        clue=stop["clue_to_next"] if stop["clue_to_next"] else "",
+                        error=None,
+                    )
             if next_stop:
                 return render_template(
                     "clue.html",
@@ -497,6 +563,13 @@ def finale(country_code):
         (country_code.upper(),),
     ).fetchone()
 
+    # Determine finale type (default to team_photo)
+    finale_type = finale_stop["finale_type"] if finale_stop and finale_stop["finale_type"] else "team_photo"
+
+    # Question-type finales are completed via the clue page, redirect to complete
+    if finale_type == "question":
+        return redirect(f"/complete/{country_code}")
+
     # Use finale stop fields if available, otherwise fall back to defaults
     finale_message = finale_stop["finale_message"] if finale_stop and finale_stop["finale_message"] else "You made it to the Team Show Booth!"
     finale_task = finale_stop["finale_task"] if finale_stop and finale_stop["finale_task"] else "1. Take a team photo at this booth<br>2. Post it on Buzz with the hashtag below<br>3. Paste your Buzz post URL to complete the hunt!"
@@ -516,7 +589,24 @@ def finale(country_code):
                 finale_task=finale_task,
                 finale_details=finale_details,
                 input_label=finale_input_label,
+                finale_type=finale_type,
                 error="Please enter your Buzz post URL.",
+            )
+
+        # For team_photo mode, accept any URL; for question mode, also accept any URL (since it's the final step)
+        # Just validate it looks like a URL
+        if not buzz_url.startswith(("http://", "https://")):
+            return render_template(
+                "finale.html",
+                country_name=country["name"],
+                country_code=country_code.upper(),
+                hashtag=finale_hashtag,
+                finale_message=finale_message,
+                finale_task=finale_task,
+                finale_details=finale_details,
+                input_label=finale_input_label,
+                finale_type=finale_type,
+                error="Please enter a valid URL starting with http:// or https://",
             )
 
         now = datetime.utcnow()
@@ -560,6 +650,7 @@ def finale(country_code):
         finale_task=finale_task,
         finale_details=finale_details,
         input_label=finale_input_label,
+        finale_type=finale_type,
         error=None,
     )
 
@@ -753,6 +844,7 @@ def admin_add_stop(country_code):
         is_finale = 1 if request.form.get("is_finale") else 0
 
         # Finale-specific fields
+        finale_type = request.form.get("finale_type", "team_photo").strip()
         finale_message = request.form.get("finale_message", "").strip()
         finale_task = request.form.get("finale_task", "").strip()
         finale_details = request.form.get("finale_details", "").strip()
@@ -768,8 +860,8 @@ def admin_add_stop(country_code):
                 (country_code.upper(),),
             ).fetchone()["m"]
             db.execute(
-                "INSERT INTO stops (country_code, stop_number, location_name, question, answer, clue_to_next, is_finale, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (country_code.upper(), max_num + 1, location, question, answer, clue, is_finale, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label),
+                "INSERT INTO stops (country_code, stop_number, location_name, question, answer, clue_to_next, is_finale, finale_type, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (country_code.upper(), max_num + 1, location, question, answer, clue, is_finale, finale_type, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label),
             )
             db.commit()
             return redirect(f"/admin/{country_code}")
@@ -804,6 +896,7 @@ def admin_edit_stop(country_code, stop_id):
         is_finale = 1 if request.form.get("is_finale") else 0
 
         # Finale-specific fields
+        finale_type = request.form.get("finale_type", "team_photo").strip()
         finale_message = request.form.get("finale_message", "").strip()
         finale_task = request.form.get("finale_task", "").strip()
         finale_details = request.form.get("finale_details", "").strip()
@@ -814,8 +907,8 @@ def admin_edit_stop(country_code, stop_id):
             error = "Location name is required."
         else:
             db.execute(
-                "UPDATE stops SET location_name=?, question=?, answer=?, clue_to_next=?, is_finale=?, finale_message=?, finale_task=?, finale_details=?, finale_hashtag=?, finale_input_label=? WHERE id=?",
-                (location, question, answer, clue, is_finale, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label, stop_id),
+                "UPDATE stops SET location_name=?, question=?, answer=?, clue_to_next=?, is_finale=?, finale_type=?, finale_message=?, finale_task=?, finale_details=?, finale_hashtag=?, finale_input_label=? WHERE id=?",
+                (location, question, answer, clue, is_finale, finale_type, finale_message, finale_task, finale_details, finale_hashtag, finale_input_label, stop_id),
             )
             db.commit()
             return redirect(f"/admin/{country_code}")
