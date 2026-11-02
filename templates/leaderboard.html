@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard — {{ country_name }}{% endblock %}
+{% block content %}
+<a href="/" class="back-link">&larr; Home</a>
+<h1 class="page-title" style="font-size:22px;">{{ country_name }}<br>Leaderboard</h1>
+
+{% if players %}
+<div class="card" style="padding:0; overflow:hidden;">
+    {% for p in players %}
+    <div class="leaderboard-row">
+        <div class="rank {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
+            {{ loop.index }}
+        </div>
+        <div class="player-name">{{ p.name }}</div>
+        <div class="player-time">{{ p.total_time }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;">
+    <div class="card-text">No completions yet. Be the first!</div>
+</div>
+{% endif %}
+
+<p class="footer-note">First {{ speed_quota }} to complete win a Lazzie doll!</p>
+{% endblock %}
