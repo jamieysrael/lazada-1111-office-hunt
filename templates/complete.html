@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Complete! — {{ country_name }}{% endblock %}
+{% block content %}
+<div style="text-align:center; margin-top:20px;">
+    <div style="font-size:64px; margin-bottom:16px;">🏆</div>
+    <h1 class="page-title" style="font-size:24px;">Congratulations!</h1>
+    <p class="page-subtitle">You've completed the 11.11 Office Hunt!</p>
+</div>
+
+<div class="card" style="text-align:center;">
+    <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card">
+            <div class="stat-value">{{ rank }}</div>
+            <div class="stat-label">Your Rank</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_time }}</div>
+            <div class="stat-label">Total Time</div>
+        </div>
+    </div>
+</div>
+
+{% if rank <= speed_quota %}
+<div class="success-msg" style="font-size:16px; font-weight:700;">
+    You're in the top {{ speed_quota }}! You win an exclusive Lazzie doll!
+</div>
+{% endif %}
+
+<div class="nav-links">
+    <a href="/" class="btn btn-primary">Home</a>
+</div>
+{% endblock %}
