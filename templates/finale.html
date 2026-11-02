@@ -6,6 +6,17 @@
     <div class="progress-fill" style="width: 100%"></div>
 </div>
 
+{% if finale_type == "question" %}
+<!-- Question-type finale: should have been completed via clue page -->
+<div class="success-msg">{{ finale_message }}</div>
+<div class="card">
+    <div class="card-text" style="text-align:center;">
+        Your hunt is complete! Check your results.
+    </div>
+</div>
+<a href="/complete/{{ country_code }}" class="btn btn-primary" style="display:block; text-align:center;">View Results</a>
+{% else %}
+<!-- Team photo mode: show URL submission form -->
 <div class="success-msg">{{ finale_message }}</div>
 
 <h2 class="page-title" style="font-size:22px;">Snap &amp; Share!</h2>
@@ -34,4 +45,5 @@
     <input type="url" name="buzz_url" class="input-field" placeholder="{{ input_label }}" required>
     <button type="submit" class="btn btn-primary">Complete the Hunt!</button>
 </form>
+{% endif %}
 {% endblock %}
