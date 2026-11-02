@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: lazada-1111-office-hunt
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 8 --timeout 60 --backlog 2048
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:////var/data/hunt.db
+    disk:
+      name: hunt-data
+      mountPath: /var/data
+      sizeGB: 1
