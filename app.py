@@ -11,23 +11,138 @@ from flask import (
     session, g, send_file, abort
 )
 
+# Try to import psycopg2 for PostgreSQL support
+try:
+    import psycopg2
+    import psycopg2.extras
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "1111-hunt-dev-key-change-in-prod")
 app.static_folder = "public"
 
 # ── Database ──────────────────────────────────────────────────────────
 
-DB_PATH = os.environ.get("DATABASE_URL", "hunt.db")
-if DB_PATH.startswith("sqlite:///"):
-    DB_PATH = DB_PATH[10:]
+DATABASE_URL = os.environ.get("DATABASE_URL", "hunt.db")
+
+# Determine database type
+if DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://"):
+    DB_TYPE = "postgresql"
+    # Render provides postgres:// but psycopg2 needs postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+elif DATABASE_URL.startswith("sqlite:///"):
+    DB_TYPE = "sqlite"
+    DATABASE_URL = DATABASE_URL[10:]
+else:
+    DB_TYPE = "sqlite"
+
+
+class SQLiteRow:
+    """Wrapper to make sqlite3.Row behave like a dict with bracket access."""
+    def __init__(self, row):
+        self._row = row
+    
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._row[key]
+        # For string keys, find the column index
+        return self._row[key]
+    
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except (IndexError, KeyError):
+            return default
+    
+    def keys(self):
+        return self._row.keys()
+
+
+class PostgreSQLCursor:
+    """Wrapper to make PostgreSQL cursor behave like sqlite3 cursor."""
+    def __init__(self, conn):
+        self.conn = conn
+        self.cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        self._rows = []
+    
+    def execute(self, query, params=None):
+        # Convert ? placeholders to %s for PostgreSQL
+        pg_query = query.replace("?", "%s")
+        # Handle SQLite-specific syntax
+        pg_query = pg_query.replace("PRAGMA table_info", "-- PRAGMA not supported")
+        if params:
+            self.cursor.execute(pg_query, params)
+        else:
+            self.cursor.execute(pg_query)
+        # For SELECT statements, fetch results
+        if query.strip().upper().startswith("SELECT") or "RETURNING" in query:
+            try:
+                self._rows = self.cursor.fetchall()
+            except:
+                self._rows = []
+        else:
+            self._rows = []
+        return self
+    
+    def executescript(self, script):
+        # Split script into individual statements and execute
+        for stmt in script.split(';'):
+            stmt = stmt.strip()
+            if stmt and not stmt.startswith('--'):
+                try:
+                    self.cursor.execute(stmt)
+                except Exception as e:
+                    # Ignore errors from SQLite-specific pragmas
+                    if "PRAGMA" not in stmt:
+                        pass
+    
+    def fetchone(self):
+        if self._rows:
+            row = self._rows.pop(0)
+            return dict(row) if row else None
+        return None
+    
+    def fetchall(self):
+        rows = self._rows
+        self._rows = []
+        return [dict(r) for r in rows]
+    
+    @property
+    def lastrowid(self):
+        # For PostgreSQL, we need to use RETURNING or currval()
+        # This is a fallback - ideally we'd use RETURNING in the INSERT
+        try:
+            self.cursor.execute("SELECT lastval()")
+            result = self.cursor.fetchone()
+            return result[0] if result else None
+        except:
+            return None
+    
+    def commit(self):
+        """Delegate to connection commit."""
+        self.conn.commit()
+    
+    def close(self):
+        self.cursor.close()
 
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL")
-        g.db.execute("PRAGMA busy_timeout=20000")
+        if DB_TYPE == "postgresql":
+            if not PSYCOPG2_AVAILABLE:
+                raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
+            conn = psycopg2.connect(DATABASE_URL)
+            conn.autocommit = False
+            g.db = PostgreSQLCursor(conn)
+        else:
+            conn = sqlite3.connect(DATABASE_URL)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=20000")
+            g.db = conn
     return g.db
 
 
@@ -35,76 +150,158 @@ def get_db():
 def close_db(exc):
     db = g.pop("db", None)
     if db is not None:
-        db.close()
+        if DB_TYPE == "postgresql":
+            try:
+                db.conn.commit()
+                db.close()
+                db.conn.close()
+            except:
+                pass
+        else:
+            db.close()
 
 
 def init_db():
     db = get_db()
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS countries (
-            code TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            hashtag TEXT NOT NULL,
-            admin_password_hash TEXT NOT NULL,
-            speed_quota INTEGER DEFAULT 30,
-            hunt_start TEXT,
-            hunt_end TEXT,
-            mechanics_text TEXT DEFAULT '',
-            first_clue TEXT DEFAULT ''
-        );
+    
+    if DB_TYPE == "postgresql":
+        # PostgreSQL schema
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS countries (
+                code TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                hashtag TEXT NOT NULL,
+                admin_password_hash TEXT NOT NULL,
+                speed_quota INTEGER DEFAULT 30,
+                hunt_start TEXT,
+                hunt_end TEXT,
+                mechanics_text TEXT DEFAULT '',
+                first_clue TEXT DEFAULT ''
+            );
 
-        CREATE TABLE IF NOT EXISTS stops (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            country_code TEXT NOT NULL,
-            stop_number INTEGER NOT NULL,
-            location_name TEXT NOT NULL,
-            question TEXT NOT NULL DEFAULT '',
-            answer TEXT NOT NULL DEFAULT '',
-            clue_to_next TEXT NOT NULL DEFAULT '',
-            is_finale INTEGER DEFAULT 0,
-            finale_type TEXT DEFAULT 'team_photo',
-            finale_message TEXT DEFAULT '',
-            finale_task TEXT DEFAULT '',
-            finale_details TEXT DEFAULT '',
-            finale_hashtag TEXT DEFAULT '',
-            finale_input_label TEXT DEFAULT '',
-            UNIQUE(country_code, stop_number)
-        );
+            CREATE TABLE IF NOT EXISTS stops (
+                id SERIAL PRIMARY KEY,
+                country_code TEXT NOT NULL,
+                stop_number INTEGER NOT NULL,
+                location_name TEXT NOT NULL,
+                question TEXT NOT NULL DEFAULT '',
+                answer TEXT NOT NULL DEFAULT '',
+                clue_to_next TEXT NOT NULL DEFAULT '',
+                is_finale INTEGER DEFAULT 0,
+                finale_type TEXT DEFAULT 'team_photo',
+                finale_message TEXT DEFAULT '',
+                finale_task TEXT DEFAULT '',
+                finale_details TEXT DEFAULT '',
+                finale_hashtag TEXT DEFAULT '',
+                finale_input_label TEXT DEFAULT '',
+                UNIQUE(country_code, stop_number)
+            );
 
-        CREATE TABLE IF NOT EXISTS players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            country_code TEXT NOT NULL,
-            employee_id TEXT NOT NULL,
-            name TEXT DEFAULT '',
-            registered_at TEXT NOT NULL,
-            UNIQUE(country_code, employee_id)
-        );
+            CREATE TABLE IF NOT EXISTS players (
+                id SERIAL PRIMARY KEY,
+                country_code TEXT NOT NULL,
+                employee_id TEXT NOT NULL,
+                name TEXT DEFAULT '',
+                registered_at TEXT NOT NULL,
+                UNIQUE(country_code, employee_id)
+            );
 
-        CREATE TABLE IF NOT EXISTS progress (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            player_id INTEGER NOT NULL,
-            stop_id INTEGER NOT NULL,
-            scanned_at TEXT,
-            answered_at TEXT,
-            attempts INTEGER DEFAULT 0,
-            completed INTEGER DEFAULT 0,
-            UNIQUE(player_id, stop_id)
-        );
+            CREATE TABLE IF NOT EXISTS progress (
+                id SERIAL PRIMARY KEY,
+                player_id INTEGER NOT NULL,
+                stop_id INTEGER NOT NULL,
+                scanned_at TEXT,
+                answered_at TEXT,
+                attempts INTEGER DEFAULT 0,
+                completed INTEGER DEFAULT 0,
+                UNIQUE(player_id, stop_id)
+            );
 
-        CREATE TABLE IF NOT EXISTS completions (
-            player_id INTEGER PRIMARY KEY,
-            buzz_post_url TEXT DEFAULT '',
-            completed_at TEXT NOT NULL,
-            total_time_seconds REAL DEFAULT 0
-        );
-    """)
+            CREATE TABLE IF NOT EXISTS completions (
+                player_id INTEGER PRIMARY KEY,
+                buzz_post_url TEXT DEFAULT '',
+                completed_at TEXT NOT NULL,
+                total_time_seconds REAL DEFAULT 0
+            );
+        """)
+    else:
+        # SQLite schema
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS countries (
+                code TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                hashtag TEXT NOT NULL,
+                admin_password_hash TEXT NOT NULL,
+                speed_quota INTEGER DEFAULT 30,
+                hunt_start TEXT,
+                hunt_end TEXT,
+                mechanics_text TEXT DEFAULT '',
+                first_clue TEXT DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS stops (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                country_code TEXT NOT NULL,
+                stop_number INTEGER NOT NULL,
+                location_name TEXT NOT NULL,
+                question TEXT NOT NULL DEFAULT '',
+                answer TEXT NOT NULL DEFAULT '',
+                clue_to_next TEXT NOT NULL DEFAULT '',
+                is_finale INTEGER DEFAULT 0,
+                finale_type TEXT DEFAULT 'team_photo',
+                finale_message TEXT DEFAULT '',
+                finale_task TEXT DEFAULT '',
+                finale_details TEXT DEFAULT '',
+                finale_hashtag TEXT DEFAULT '',
+                finale_input_label TEXT DEFAULT '',
+                UNIQUE(country_code, stop_number)
+            );
+
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                country_code TEXT NOT NULL,
+                employee_id TEXT NOT NULL,
+                name TEXT DEFAULT '',
+                registered_at TEXT NOT NULL,
+                UNIQUE(country_code, employee_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL,
+                stop_id INTEGER NOT NULL,
+                scanned_at TEXT,
+                answered_at TEXT,
+                attempts INTEGER DEFAULT 0,
+                completed INTEGER DEFAULT 0,
+                UNIQUE(player_id, stop_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS completions (
+                player_id INTEGER PRIMARY KEY,
+                buzz_post_url TEXT DEFAULT '',
+                completed_at TEXT NOT NULL,
+                total_time_seconds REAL DEFAULT 0
+            );
+        """)
+    
     db.commit()
 
 
 def migrate_db():
     """Add new columns to existing database if they don't exist."""
     db = get_db()
-    columns = db.execute("PRAGMA table_info(stops)").fetchall()
+    
+    if DB_TYPE == "postgresql":
+        # PostgreSQL: use information_schema to check columns
+        columns = db.execute("""
+            SELECT column_name as name FROM information_schema.columns 
+            WHERE table_name = 'stops'
+        """).fetchall()
+    else:
+        # SQLite: use PRAGMA table_info
+        columns = db.execute("PRAGMA table_info(stops)").fetchall()
+    
     existing = {col["name"] for col in columns}
 
     new_columns = [
